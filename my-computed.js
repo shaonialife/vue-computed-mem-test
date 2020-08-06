@@ -5,79 +5,99 @@ Vue.use(VueCompositionApi.default);
 
 const { ref, getCurrentInstance } = VueCompositionApi;
 
-const myComputed = (() => {
-  let Watcher;
-  let Dep;
-  let RefImpl;
+let vueInternalClasses;
 
-  const init = () => {
-    if (!Watcher) {
-      const vm = new Vue({
-        computed: {
-          value() {
-            return 0;
-          },
+const getInternalClasses = () => {
+  if (!vueInternalClasses) {
+    const vm = new Vue({
+      computed: {
+        value() {
+          return 0
         },
-      });
+      },
+    });
 
-      /* eslint-disable no-underscore-dangle */
+    // to get Watcher class
+    const Watcher = vm._computedWatchers.value.constructor
+    // to get Dep class
+    const Dep = vm._data.__ob__.dep.constructor
+    // to get RefImpl class
+    const RefImpl = ref(0).constructor;
 
-      // to get Watcher class
-      Watcher = vm._computedWatchers.value.constructor;
-      // to get Dep class
-      Dep = vm._data.__ob__.dep.constructor;
-
-      /* eslint-enable no-underscore-dangle */
-
-      // to get RefImpl class
-      RefImpl = ref(0).constructor;
-
-      vm.$destroy();
-    }
-  };
-
-  return ((option) => {
-    const vm = getCurrentInstance();
-
-    let get;
-    let set;
-    if (typeof option === 'function') {
-      get = option;
-    } else {
-      get = option.get;
-      set = option.set;
-    }
-
-    init();
-
-    let watcher;
-    const computedGetter = () => {
-      if (!watcher) {
-        watcher = new Watcher(vm, get, noop, { lazy: true });
-      }
-
-      if (watcher.dirty) {
-        watcher.evaluate();
-      }
-      if (Dep.target) {
-        watcher.depend();
-      }
-
-      return watcher.value;
+    vueInternalClasses = {
+      Watcher,
+      Dep,
+      RefImpl,
     };
 
-    return Object.seal(new RefImpl({
-      get: computedGetter,
-      set: (v) => {
-        if (!set) {
-          console.warn('Computed property was assigned to but it has no setter');
-          return;
-        }
-        set(v);
+    vm.$destroy();
+  }
+
+  return vueInternalClasses;
+}
+
+function noopFn() {
+}
+
+function myComputed(options) {
+  const vm = getCurrentInstance()
+  let get, set;
+  if (typeof options === 'function') {
+    get = options
+  } else {
+    get = options.get
+    set = options.set
+  }
+
+  let computedSetter
+  let computedGetter
+
+  const { Watcher, Dep, RefImpl } = getInternalClasses()
+
+  if (vm) {
+    let watcher
+    computedGetter = () => {
+      if (!watcher) {
+        watcher = new Watcher(vm, get, noopFn, { lazy: true })
+      }
+      if (watcher.dirty) {
+        watcher.evaluate()
+      }
+      if (Dep.target) {
+        watcher.depend()
+      }
+      return watcher.value
+    }
+
+    computedSetter = (v) => {
+      if (set) {
+        set(v)
+      }
+    }
+  } else {
+    // fallback
+    const computedHost = new Vue({
+      computed: {
+        $$state: {
+          get,
+          set,
+        },
       },
-    }));
-  });
-})();
+    })
+
+    computedGetter = () => computedHost.$$state
+    computedSetter = () => {
+      computedHost.$$state = v
+    }
+  }
+
+  return Object.seal(new RefImpl(
+    {
+      get: computedGetter,
+      set: computedSetter,
+    },
+  ));
+}
 
 new Vue({
   setup() {
