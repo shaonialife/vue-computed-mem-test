@@ -7,10 +7,18 @@ npm install
 ```
 npm run test-default
 ```
-and you will see ```heapUsed: 60.60MB```
+then you will see
+```
+heapUsed: 60.56MB
+timeUsed: 210.628ms
+```
 
 ## test lightweight-computed
 ```
 npm run test-mine
 ```
-and you will see ```heapUsed: 8.19MB```
+then you will see
+```
+heapUsed: 8.77MB
+timeUsed: 27.966ms
+```
